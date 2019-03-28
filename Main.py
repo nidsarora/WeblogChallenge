@@ -70,13 +70,20 @@ split_col = split(logDataFrame['client_ip'], ':')
 logDataFrame = logDataFrame.withColumn('IP', split_col.getItem(0))
 logDataFrameWithIP = logDataFrame.withColumn('time_stamp', func(col('timestamp_str'))).cache()
 
-
-logDataFrameWithIP.select("*").take(1)
-
-
-logDataFrameIPTimeStamp = logDataFrameWithIP.withColumn('time_stamp_previous_str',
-                        lag(logDataFrame.timestamp_str,1)
+logDataFrameIPTimeStamp = logDataFrameWithIP.withColumn('time_stamp_previous',
+                        lag(logDataFrameWithIP.time_stamp,1)
                                  .over(Window.partitionBy("IP").orderBy("time_stamp"))).cache()
 
 logDataFrameIPTimeStamp.select('IP').show(2)
+
+
+logDataFrameIPTimeStamp = logDataFrameIPTimeStamp.withColumn(
+    "time_diff_in_mins", 
+    (F.col("time_stamp").cast("long") - F.col("time_stamp_previous").cast("long"))
+)
+
+logDataFrameIPTimeStamp.select('IP','time_diff_in_mins').show(15)
+
+
+
 
