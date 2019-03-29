@@ -77,26 +77,50 @@ logDataFrameIPTimeStamp = logDataFrameWithIP.withColumn('time_stamp_previous',
 logDataFrameIPTimeStamp.select('IP').show(2)
 
 
+#logDataFrameIPTimeStamp = logDataFrameIPTimeStamp.withColumn(
+#    "time_diff_in_secs", 
+#    (F.col("time_stamp").cast("long") - F.col("time_stamp_previous").cast("long"))
+#)
+
 logDataFrameIPTimeStamp = logDataFrameIPTimeStamp.withColumn(
-    "time_diff_in_mins", 
-    (F.col("time_stamp").cast("long") - F.col("time_stamp_previous").cast("long"))
+    "time_diff_in_secs", 
+    unix_timestamp("time_stamp") - unix_timestamp("time_stamp_previous")
 )
 
-logDataFrameIPTimeStamp.select('user_agent').distinct().show(10)
+logDataFrameIPTimeStamp.select('*').show(100)
+logDataFrameIPTimeStamp.createOrReplaceTempView("log_session")
+SpSession.sql("select IP,time_diff_in_secs from log_session where time_diff_in_secs>900 order by IP, time_stamp ").show()
 
-logDataFrameSession = logDataFrameIPTimeStamp.select(F.when(logDataFrameIPTimeStamp.time_diff_in_mins > 15, lit(1)).otherwise(lit(0)).alias("new_session"))
+
+
+
+#logDataFrameIPTimeStamp.select('user_agent').distinct().show(10)
+#
+logDataFrameSession = logDataFrameIPTimeStamp.select(F.when(logDataFrameIPTimeStamp.time_diff_in_secs > 900, lit(1)).otherwise(lit(0)).alias("new_session"))
 logDataFrameSession.select('*').show(3)
 
-logDataFrameSession = logDataFrameIPTimeStamp.withColumn('new_session',F.when(((logDataFrameIPTimeStamp.time_diff_in_mins > 15) | (logDataFrameIPTimeStamp.time_diff_in_mins.isNull())), lit(1)).otherwise(lit(0)))
+
+logDataFrameSession = logDataFrameIPTimeStamp.withColumn('new_session',F.when(((logDataFrameIPTimeStamp.time_diff_in_secs > 900) | (logDataFrameIPTimeStamp.time_diff_in_secs.isNull())), lit(1)).otherwise(lit(0)))
 logDataFrameSession.createOrReplaceTempView("log_new_session")
-SpSession.sql("select IP,time_diff_in_mins,new_session from log_new_session").show()
+SpSession.sql("select IP,time_diff_in_secs,new_session from log_new_session").show()
 
   
 logDataFrameSessionId = SpSession.sql("select *,(SUM(new_session) OVER (PARTITION BY IP ORDER BY IP,time_stamp)) as session_id from log_new_session")
 logDataFrameSessionId.createOrReplaceTempView("log_new_session_id")
-SpSession.sql("select IP,new_session,session_id,time_stamp from log_new_session_id order by IP,time_stamp").show(100)
+SpSession.sql("select IP,new_session,session_id,time_stamp,time_diff_in_secs,time_stamp_previous from log_new_session_id order by IP,time_stamp").show(5)
 
 #Q1 i.e the sessions are represented by logDataFrameSessionId, Every IP has its own session ids
+
+SpSession.sql("select * from log_new_session_id where IP is null").count()
+#So, null IPs are there
+
+###################################Q2###############################################
+
+logDataFrameSessionTime = SpSession.sql("select IP,session_id,sum(time_diff_in_secs) as session_time from log_new_session_id group by IP,session_id order by IP,session_id")
+logDataFrameSessionTime.createOrReplaceTempView("log_session_time")
+SpSession.sql("select Avg(session_time) as avg_session_time from log_session_time").show()
+
+
 
              
 
