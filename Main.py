@@ -119,6 +119,13 @@ SpSession.sql("select * from log_new_session_id where IP is null").count()
 logDataFrameSessionTime = SpSession.sql("select IP,session_id,sum(time_diff_in_secs) as session_time from log_new_session_id group by IP,session_id order by IP,session_id")
 logDataFrameSessionTime.createOrReplaceTempView("log_session_time")
 SpSession.sql("select Avg(session_time) as avg_session_time from log_session_time").show()
+#Average session time is 2625.0743308697874 seconds
+
+logUniqueVisits = SpSession.sql("select IP,session_id,count(*) as unique_url_count from ( select distinct IP,session_id, user_agent from log_new_session_id )group by IP,session_id order by IP,session_id")
+logUniqueVisits.show()
+
+
+
 
 
 
