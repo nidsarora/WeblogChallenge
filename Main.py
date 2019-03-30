@@ -62,22 +62,20 @@ datalines = sc.textFile(pathToTextFile)
 datalines.count()
 
 
-#created a dataframe
-dataparts = datalines.map(lambda l: l.split(" "))
-dataMap = dataparts.map(lambda p: Row(timestamp_str=p[0],elb_name=p[1],client_ip=p[2],back_end_ip=p[3],request_processing_time=p[4],\
-         backend_processing_time=p[5], response_processing_time=p[6],elb_status_code=p[7],backend_status_code=p[8],\
-        received_bytes=p[9],sent_bytes=p[10], request=p[11],url =p[12],http_v= p[13],user_agent=p[14],ssl_cipher=p[15],ssl_protocol=p[16]))
+df = pd.read_csv(pathToTextFile, sep=" ", names=["timestamp_str","elb_name","client_ip","back_end_ip","request_processing_time","backend_processing_time",\
+           "response_processing_time","elb_status_code","backend_status_code","received_bytes","sent_bytes",\
+           "request","user_agent","ssl_cipher","ssl_protocol"])
+df['user_agent'] = df['user_agent'].astype(str)
+df['url'] = df['request'].astype(str).str.split().str[1]
+df['IP']=df['client_ip'].astype(str).str.split().str[0]
+logDataFrame = SpSession.createDataFrame(df)
 
-logDataFrame = SpSession.createDataFrame(dataMap)
-logDataFrame.show(2)
 
 func =  udf (lambda x: datetime.strptime(x, '%Y-%m-%dT%H:%M:%S.%fZ'), TimestampType())
 
 func2 =  udf (lambda x: x.replace(microsecond=0), TimestampType())
 
 
-split_col = split(logDataFrame['client_ip'], ':')
-logDataFrame = logDataFrame.withColumn('IP', split_col.getItem(0))
 logDataFrameWithIP = logDataFrame.withColumn('time_stamp', func(col('timestamp_str'))).cache()
 
 logDataFrameWithIPNoMicroSecs = logDataFrameWithIP.withColumn('time_stamp_without_microsecs', func2(col('time_stamp'))).cache()
@@ -90,12 +88,6 @@ logDataFrameIPTimeStamp = logDataFrameWithIP.withColumn('time_stamp_previous',
 
 logDataFrameIPTimeStamp.select('IP').show(2)
 
-
-#logDataFrameIPTimeStamp = logDataFrameIPTimeStamp.withColumn(
-#    "time_diff_in_secs", 
-#    (F.col("time_stamp").cast("long") - F.col("time_stamp_previous").cast("long"))
-#)
-
 logDataFrameIPTimeStamp = logDataFrameIPTimeStamp.withColumn(
     "time_diff_in_secs", 
     unix_timestamp("time_stamp") - unix_timestamp("time_stamp_previous")
@@ -103,7 +95,7 @@ logDataFrameIPTimeStamp = logDataFrameIPTimeStamp.withColumn(
 
 logDataFrameIPTimeStamp.select('*').show(100)
 logDataFrameIPTimeStamp.createOrReplaceTempView("log_session")
-SpSession.sql("select IP,time_diff_in_secs from log_session where time_diff_in_secs>900 order by IP, time_stamp ").show()
+SpSession.sql("select IP,time_diff_in_secs from log_session where time_diff_in_secs>900 order by IP, time_stamp,user_agent ").show()
 
 
 
@@ -177,48 +169,48 @@ df_requests_pd =df_requests_pd['requests_per_sec']
 train = df_requests_pd[2289:4089]
 test = df_requests_pd[-180:]
 
-history=[x for x in train]
-
-model = ARIMA(history,order=(5, 1, 4))
-model_fit = model.fit(disp=0)
-output = model_fit.aic
-
-
-model = sarimax.SARIMAX(history,order=(1, 1, 1), seasonal_order=(1, 1, 1,60),enforce_stationarity=False, enforce_invertibility=False)
-model_fit = model.fit(disp=0)
-current_aic = model_fit.aic
-               
-final_aic = float('Inf')
-for p in range(0,7):
-    for q in range(0,7): 
-               print("p,q",p,q)
-               model = ARIMA(history,order=(p, 1, q))
-               model_fit = model.fit(disp=0)
-               current_aic = model_fit.aic
-               print(current_aic)
-               if(current_aic<final_aic):
-                   final_aic = current_aic
-                   final_p = p
-                   final_q = q
-                   print("final p q are",final_p,final_q)
-                   
-for p in range(0,5):
-    for q in range(0,5):
-       for  P in range(0,5):
-           for Q in range(0,5): 
-               print("p,q,P,Q",p,q,P,Q)
-               model = sarimax.SARIMAX(history,order=(p, 1, q), seasonal_order=(P, 1, Q,60),enforce_stationarity=False, enforce_invertibility=False)
-               model_fit = model.fit(disp=0)
-               current_aic = model_fit.aic
-               print(current_aic)
-               if(current_aic<final_aic):
-                   final_aic = current_aic
-                   final_p = p
-                   final_q = q
-                   final_P = P
-                   final_Q = Q
-                   print("final p q P Q are",final_p,final_q,final_P, final_Q)
-                   
+#history=[x for x in train]
+#
+#model = ARIMA(history,order=(5, 1, 4))
+#model_fit = model.fit(disp=0)
+#output = model_fit.aic
+#
+#
+#model = sarimax.SARIMAX(history,order=(1, 1, 1), seasonal_order=(1, 1, 1,60),enforce_stationarity=False, enforce_invertibility=False)
+#model_fit = model.fit(disp=0)
+#current_aic = model_fit.aic
+#               
+#final_aic = float('Inf')
+#for p in range(0,7):
+#    for q in range(0,7): 
+#               print("p,q",p,q)
+#               model = ARIMA(history,order=(p, 1, q))
+#               model_fit = model.fit(disp=0)
+#               current_aic = model_fit.aic
+#               print(current_aic)
+#               if(current_aic<final_aic):
+#                   final_aic = current_aic
+#                   final_p = p
+#                   final_q = q
+#                   print("final p q are",final_p,final_q)
+#                   
+#for p in range(0,5):
+#    for q in range(0,5):
+#       for  P in range(0,5):
+#           for Q in range(0,5): 
+#               print("p,q,P,Q",p,q,P,Q)
+#               model = sarimax.SARIMAX(history,order=(p, 1, q), seasonal_order=(P, 1, Q,60),enforce_stationarity=False, enforce_invertibility=False)
+#               model_fit = model.fit(disp=0)
+#               current_aic = model_fit.aic
+#               print(current_aic)
+#               if(current_aic<final_aic):
+#                   final_aic = current_aic
+#                   final_p = p
+#                   final_q = q
+#                   final_P = P
+#                   final_Q = Q
+#                   print("final p q P Q are",final_p,final_q,final_P, final_Q)
+#                   
     
                    
 #model1 = sarimax.SARIMAX(endog,  order=(1, 0, 0), seasonal_order=(0, 0, 0, 0), trend=None, measurement_error=False, time_varying_regression=False, mle_regression=True, simple_differencing=False, enforce_stationarity=True, enforce_invertibility=True, hamilton_representation=False, concentrate_scale=False, **kwargs)
