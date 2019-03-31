@@ -125,6 +125,7 @@ func2 =  udf (lambda x: x.replace(microsecond=0), TimestampType())
 
 split_col = split(logDataFrame['client_ip'], ':')
 logDataFrame = logDataFrame.withColumn('IP', split_col.getItem(0))
+logDataFrame.createOrReplaceTempView("data_With_IP")
 logDataFrameWithIP = logDataFrame.withColumn('time_stamp', func(col('timestamp_str'))).cache()
 
 logDataFrameWithIPNoMicroSecs = logDataFrameWithIP.withColumn('time_stamp_without_microsecs', func2(col('time_stamp'))).cache()
@@ -204,6 +205,8 @@ SpSession.sql("select time_stamp_without_microsecs,requests_per_sec from df_requ
 requestsPredDf = SpSession.sql("select requests_per_sec from df_requests_prep")
 df_requests_pd = requestsPredDf.toPandas()
 
+
+
 acf = plot_acf(df_requests_pd[180:240])
 acf.savefig(r'''C:\Users\arora\WeblogChallenge\images\acf.png''')
 acf = plot_pacf(df_requests_pd[180:240])
@@ -249,6 +252,11 @@ model_fit = model.fit(disp=0)
 current_aic = model_fit.aic
 output = model_fit.forecast(60)
 
+predictions_df = pd.DataFrame(list(output))
+original_df = pd.DataFrame(list(test))
+timeseries_forecasts_Df = pd.concat([original_df,predictions_df],axis=1,keys=['Original','Predicted'])
+
+
 #final_aic = float('Inf')
 #for p in range(0,7):
 #    for q in range(0,7): 
@@ -285,41 +293,87 @@ output = model_fit.forecast(60)
 #model1 = sarimax.SARIMAX(endog,  order=(1, 0, 0), seasonal_order=(0, 0, 0, 0), trend=None, measurement_error=False, time_varying_regression=False, mle_regression=True, simple_differencing=False, enforce_stationarity=True, enforce_invertibility=True, hamilton_representation=False, concentrate_scale=False, **kwargs)
 SpSession.sql("select distinct  url from log_new_session_id").take(20)
 
-logDataFrameSessionId.take(1)
-split_col = split(logDataFrameSessionId['url'], '/')
-df_for_clustering = logDataFrameSessionId.withColumn('category', split_col.getItem(3))
-df_for_clustering = df_for_clustering.withColumn('sub_category', split_col.getItem(4))
-split_col2 = split(df_for_clustering['sub_category'], '\?')
-df_for_clustering = df_for_clustering.withColumn('sub_category1', split_col2.getItem(0))
-df_for_clustering.take(2)
-
-df_for_clustering.createOrReplaceTempView("dataforClustering")
-sqlContext.sql("SELECT distinct category from dataforClustering").count()
-sqlContext.sql("SELECT distinct category from dataforClustering").show(20)
-#df_for_clustering = df_for_clustering.withColumn('third', split_col.getItem(5))
-#df_for_clustering.take(20)
-#split_col = split(df_for_clustering['url'], '\?')
-#df_for_clustering = df_for_clustering.withColumn('third', split_col.getItem(1))
-#df_for_clustering.take(20)
-#df_for_clustering.createOrReplaceTempView("dataforClustering")
-#SpSession.sql("select distinct ist from dataforClustering").count()
-
-
-#import re
-#import sys
+#logDataFrameSessionId.take(1)
+#split_col = split(logDataFrameSessionId['url'], '/')
+#df_for_clustering = logDataFrameSessionId.withColumn('category', split_col.getItem(3))
+#df_for_clustering = df_for_clustering.withColumn('sub_category', split_col.getItem(4))
+#split_col2 = split(df_for_clustering['sub_category'], '\?')
+#df_for_clustering = df_for_clustering.withColumn('sub_category1', split_col2.getItem(0))
+#df_for_clustering.take(2)
 #
-#URL_LOG_PATTERN = '^(\S+)//(\S+)/(\S+)/(\S+)'  
-#def parse_url(url):
-#    match = re.search(URL_LOG_PATTERN, url)
-#    if match is None:
-#         raise Error("Invalid logline: %s" % logline)
-#    return Row(
-#        category    = match.group(3),
-#        sub_category = match.group(4)
-#    )
-#from pyspark.sql import SQLContext
-#sqlContext = SQLContext(sc)
-#rdd_url = logDataFrameSessionId.select('url').rdd
-#access_url = (rdd_url.map(lambda x: parse_url(x)).cache())
-#access_url.collect().count()
+#df_for_clustering.createOrReplaceTempView("dataforClustering")
+#sqlContext.sql("SELECT distinct category from dataforClustering").count()
+#sqlContext.sql("SELECT distinct category from dataforClustering").show(20)
+#
+#logUniqueVisits = SpSession.sql("select IP,session_id,count(*) as unique_url_count from ( select distinct IP,session_id, url from log_new_session_id )group by IP,session_id order by IP,session_id")
+#SpSession.sql("select max(session_time) from log_session_time").show()
+#SpSession.sql("select IP from log_session_time where session_time = (select max(session_time) from log_session_time)").show()
+#test_IP = '
+#SpSession.sql("select IP,session_id,count(*) as unique_url_count  from log_session_time where IP =").show()
+dfIPWithAvgRPAndRB = SpSession.sql("select IP, avg(request_processing_time) as avg_req_processing_time,avg(received_bytes) as avg_received_bytes from data_With_IP group by IP")
+dfIPWithAvgRPAndRB.show()
+dfIPWithAvgRPAndRB.createOrReplaceTempView("df_avg_rp_rb")
 
+dfIPWithUniqueUrlCount = SpSession.sql("select IP,session_id,count(*) as unique_url_count from ( select distinct IP,session_id, url from log_new_session_id )group by IP,session_id order by IP,session_id")
+dfIPWithUniqueUrlCount.createOrReplaceTempView("df_unique_url")
+dfIPWithUniqueUrlCount.show()
+dfIPWithAvgUniqueUrlCount = SpSession.sql("select IP, avg(unique_url_count) as avg_unique_url_count from df_unique_url group by IP")
+dfIPWithAvgUniqueUrlCount.show()
+dfIPWithAvgUniqueUrlCount.createOrReplaceTempView("df_avg_unique_url_count")
+
+
+dfIPWithAvgLogSessionTime = SpSession.sql("select IP, avg(session_time) as avg_session_time from log_session_time group by IP")
+dfIPWithAvgLogSessionTime.show()
+dfIPWithAvgLogSessionTime.createOrReplaceTempView("df_avg_session_time")
+
+
+
+avg_req_processing_time|avg_received_bytes|          IP|avg_unique_url_count|          IP|avg_session_time
+
+dfForClusteringWithIP = SpSession.sql("select     df_avg_rp_rb.IP,avg_req_processing_time,avg_received_bytes,avg_unique_url_count,avg_session_time\
+                from   df_avg_rp_rb inner join df_avg_unique_url_count ON df_avg_rp_rb.IP = df_avg_unique_url_count.IP\
+                inner join df_avg_session_time ON df_avg_rp_rb.IP = df_avg_session_time.IP")
+dfForClusteringWithIP.show()
+
+dfForClustering = SpSession.sql("select avg_req_processing_time,avg_received_bytes,avg_unique_url_count,avg_session_time\
+                from   df_avg_rp_rb inner join df_avg_unique_url_count ON df_avg_rp_rb.IP = df_avg_unique_url_count.IP\
+                inner join df_avg_session_time ON df_avg_rp_rb.IP = df_avg_session_time.IP")
+dfForClustering.show()
+dfForClustering.cache()
+#Features used were for each IP were avg. request_processing_time, avg. received_bytes, avg. number of unique url, avg. session time
+
+summStats=dfForClustering.describe().toPandas()
+meanValues=summStats.iloc[1,1:5].values.tolist()
+stdValues=summStats.iloc[2,1:5].values.tolist()
+
+#place the means and std.dev values in a broadcast variable
+bcMeans=sc.broadcast(meanValues)
+bcStdDev=sc.broadcast(stdValues)
+
+def normalize(inRow) :
+    global bcMeans
+    global bcStdDev
+    
+    meanArray=bcMeans.value
+    stdArray=bcStdDev.value
+
+    retArray=[]
+    for i in range(len(meanArray)):
+        retArray.append( (float(inRow[i]) - float(meanArray[i])) /\
+            float(stdArray[i]) )
+    return Vectors.dense(retArray)
+    
+clusteringData = dfForClustering.rdd.map(normalize)
+clusteringData.collect()
+
+
+autoRows=clusteringData.map( lambda f:Row(features=f))
+clusteringDataDf = SpSession.createDataFrame(autoRows)
+
+clusteringDataDf.select("features").show(10)
+
+from pyspark.ml.clustering import KMeans
+kmeans = KMeans(k=36, seed=1)
+model = kmeans.fit(clusteringDataDf)
+predictions = model.transform(clusteringDataDf)
+predictions.show()
