@@ -164,6 +164,7 @@ logDataFrameSession.select('*').show(3)
 
 logDataFrameSession = logDataFrameIPTimeStamp.withColumn('new_session',F.when(((logDataFrameIPTimeStamp.time_diff_in_secs > 900) | (logDataFrameIPTimeStamp.time_diff_in_secs.isNull())), lit(1)).otherwise(lit(0)))
 logDataFrameSession.createOrReplaceTempView("log_new_session")
+
 SpSession.sql("select IP,time_diff_in_secs,new_session from log_new_session").show()
 
   
@@ -179,6 +180,8 @@ SpSession.sql("select * from log_new_session_id where IP is null").count()
 ###################################Q2###############################################
 
 logDataFrameSessionTime = SpSession.sql("select IP,session_id,sum(time_diff_in_secs) as session_time from log_new_session_id group by IP,session_id order by IP,session_id")
+logDataFrameSessionTime.createOrReplaceTempView("log_session_time_tmp")
+logDataFrameSessionTime= SpSession.sql("select IP, ifnull(session_time, 0) as session_time from log_session_time_tmp")
 logDataFrameSessionTime.show()
 logDataFrameSessionTime.createOrReplaceTempView("log_session_time")
 SpSession.sql("select Avg(session_time) as avg_session_time from log_session_time").show()
@@ -327,9 +330,6 @@ dfIPWithAvgLogSessionTime.show()
 dfIPWithAvgLogSessionTime.createOrReplaceTempView("df_avg_session_time")
 
 
-
-avg_req_processing_time|avg_received_bytes|          IP|avg_unique_url_count|          IP|avg_session_time
-
 dfForClusteringWithIP = SpSession.sql("select     df_avg_rp_rb.IP,avg_req_processing_time,avg_received_bytes,avg_unique_url_count,avg_session_time\
                 from   df_avg_rp_rb inner join df_avg_unique_url_count ON df_avg_rp_rb.IP = df_avg_unique_url_count.IP\
                 inner join df_avg_session_time ON df_avg_rp_rb.IP = df_avg_session_time.IP")
@@ -337,9 +337,9 @@ dfForClusteringWithIP.show()
 
 dfForClustering = SpSession.sql("select avg_req_processing_time,avg_received_bytes,avg_unique_url_count,avg_session_time\
                 from   df_avg_rp_rb inner join df_avg_unique_url_count ON df_avg_rp_rb.IP = df_avg_unique_url_count.IP\
-                inner join df_avg_session_time ON df_avg_rp_rb.IP = df_avg_session_time.IP")
+                inner join df_avg_session_time ON df_avg_rp_rb.IP = df_avg_session_time.IP").cache()
 dfForClustering.show()
-dfForClustering.cache()
+
 #Features used were for each IP were avg. request_processing_time, avg. received_bytes, avg. number of unique url, avg. session time
 
 summStats=dfForClustering.describe().toPandas()
@@ -349,8 +349,13 @@ stdValues=summStats.iloc[2,1:5].values.tolist()
 #place the means and std.dev values in a broadcast variable
 bcMeans=sc.broadcast(meanValues)
 bcStdDev=sc.broadcast(stdValues)
+from pyspark.sql import Row
+
+import math
+from pyspark.ml.linalg import Vectors
 
 def normalize(inRow) :
+
     global bcMeans
     global bcStdDev
     
@@ -358,7 +363,7 @@ def normalize(inRow) :
     stdArray=bcStdDev.value
 
     retArray=[]
-    for i in range(len(meanArray)):
+    for i in range(4):
         retArray.append( (float(inRow[i]) - float(meanArray[i])) /\
             float(stdArray[i]) )
     return Vectors.dense(retArray)
@@ -367,13 +372,64 @@ clusteringData = dfForClustering.rdd.map(normalize)
 clusteringData.collect()
 
 
+
 autoRows=clusteringData.map( lambda f:Row(features=f))
 clusteringDataDf = SpSession.createDataFrame(autoRows)
 
 clusteringDataDf.select("features").show(10)
 
 from pyspark.ml.clustering import KMeans
-kmeans = KMeans(k=36, seed=1)
+
+Sum_of_squared_distances = []
+K = range(2,10)
+for t in K:
+    km = KMeans(k=t)
+    km = km.fit(clusteringDataDf)
+    Sum_of_squared_distances.append(km.inertia_)
+    
+
+cost = np.zeros(2)
+for k in range(2,3):
+    print("k is",k)
+    kmeans = KMeans().setK(k).setSeed(1).setFeaturesCol("features")
+    model = kmeans.fit(clusteringDataDf.sample(False,0.1, seed=10))
+    cost[k] = model.computeCost(clusteringDataDf) # requires Spark 2.0 or later
+    
+import matplotlib.pyplot as plt
+
+cost = np.zeros(8)
+for t in range(6,8):   
+   print("k is",t)
+   kmeans = KMeans(k=t, seed=1)
+   model = kmeans.fit(clusteringDataDf)
+   cost[t] = model.computeCost(clusteringDataDf)
+   print("cost for k=",t,cost[t])
+   
+#cost for
+#                    k = 3 is 237352.30733043578
+#                    k = 4 is 172033.76753159278
+#                    k = 5 is 167181.11987527306
+#                    k = 6 is 134039.79768744443
+#                    k = 7 is 88746.62403988624
+#                    k = 8 is 133838.24873825608
+
+kmeans = KMeans(k=7, seed=1)
 model = kmeans.fit(clusteringDataDf)
 predictions = model.transform(clusteringDataDf)
 predictions.show()
+
+#cost = model.computeCost(clusteringDataDf)
+#print(cost)
+
+
+
+#predictions = model.transform(clusteringDataDf)
+#predictions.show()
+   
+plt.plot(K, Sum_of_squared_distances, 'bx-')
+plt.xlabel('k')
+plt.ylabel('Sum_of_squared_distances')
+plt.title('Elbow Method For Optimal k')
+plt.show()
+
+clusteringDataDfPred = clusteringDataDf.withColumn('predictions',predictions)
