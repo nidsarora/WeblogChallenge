@@ -39,7 +39,10 @@ we can cluster them and predict the expected number of unique urls and their ses
 *Other factors taken for K-Means are: avg_req_processing_time,avg_received_bytes, avg_session_time<br />
 *The value of k was found to be 7 using the elbow method<br />
 
+The prediction is given to be in between <the average session time of IP through history> and <average session time of the cluster to which it belongs><br />
+
 In future, considering url_counts for products obtained from url for eg if user consists of wallet/sub_category, the clustering should considering
 them to create powerful clusters<br />
 
 The code has comments for all the operations applied to solve each problem.<br />
+
