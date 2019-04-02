@@ -9,17 +9,17 @@ Pyspark
 ## Assumptions
 
 
-#To sessionize the web logs
+#To sessionize the web logs<br />
 
-The sessions were created using:
-*IP 
-*user_agent - As the session from different user agent will be different even if the IP remains the same
-*Session Window time is taken as 15 minutes
-Session length for sessions that just start are taken as sum of request_processing_time,response_processing_time 
-and backend_processing_time, assuming the user waits for the response
+The sessions were created using:<br />
+*IP <br />
+*user_agent - As the session from different user agent will be different even if the IP remains the same<br />
+*Session Window time is taken as 15 minutes<br />
+Session length for sessions that just start are taken as sum of request_processing_time,response_processing_time <br />
+and backend_processing_time, assuming the user waits for the response<br />
  
 
-#For prediction of requests/sec for the next minute:
+#For prediction of requests/sec for the next minute:<br />
 
 *ARIMA and seasonal ARIMA were analyzed. <br />
 *ACF and PACF plots were plotted ,AIC of different models were compared to find the best hyperparameters for the model.<br />
