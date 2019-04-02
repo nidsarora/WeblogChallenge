@@ -6,6 +6,12 @@
 Pyspark
 
 
+## Files in folder
+
+*Main2.pynb - has all the code with results in it<br />
+*images folder - has images of ACF ana PACF plots drawn to evaulate the p,d,q in ARIMA<br />
+*results folder - compares results predicted for time series
+
 ## Assumptions
 
 
