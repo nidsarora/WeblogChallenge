@@ -9,7 +9,7 @@ Pyspark
 ## Files in folder
 
 *Main2.pynb - has all the code with results in it<br />
-*images folder - has images of ACF ana PACF plots drawn to evaulate the p,d,q in ARIMA<br />
+*images folder - has images of ACF and PACF plots drawn to evaulate the p,d,q in ARIMA<br />
 *results folder - compares results predicted for time series
 
 ## Assumptions
@@ -46,6 +46,10 @@ we can cluster them and predict the expected number of unique urls and their ses
 *The value of k was found to be 7 using the elbow method<br />
 
 The prediction is given to be in between <the average session time of IP through history> and <average session time of the cluster to which it belongs><br />
+
+** The solution is<br />
+The predicted session time for IP= 1.39.32.249 is between 149(from history) and 150(from cluster)<br />
+IP = 1.39.32.249, unique url count lies between 7(from cluster) and 6(from hisory)<br />
 
 In future, considering url_counts for products obtained from url for eg if user consists of wallet/sub_category, the clustering should considering
 them to create powerful clusters<br />
